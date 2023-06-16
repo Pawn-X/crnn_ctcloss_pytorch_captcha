@@ -1,0 +1,50 @@
+import torch
+import itertools
+from chars import CHARS
+
+def train(epoch, EPOCH, train_loader, model, criterion, optimizer, device):
+    running_loss = 0
+    for inputs, target, tar_len in train_loader:
+        # inputs, target = data
+        inputs = inputs.to(device)
+        target = target.to(device)
+        tar_len = tar_len.to(device)
+        outputs, out_len = model(inputs)
+        outputs = outputs.log_softmax(2).requires_grad_()
+        # target = target.view(-1)
+        loss = criterion(outputs, target, out_len, tar_len)
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        running_loss += loss.item()
+    print('[%d / %d]: running loss: %.6f' % (epoch + 1, EPOCH, running_loss))
+
+
+def test(epoch, EPOCH, test_loader, model, device):
+    correct = 0
+    with torch.no_grad():  # 测试集不用算梯度
+        for data in test_loader:
+            images, labels, _ = data
+            images = images.to(device)
+            labels = labels.to(device)
+            outputs, _ = model(images)
+            outputs = outputs.permute(1, 0, 2)
+            #outputs = outputs.reshape(shape=(batch_size, 3 * target_len, len(CHARS)))
+            for i in range(outputs.shape[0]):
+                label = ''
+                final = ''
+                output_result = outputs[i, :, :]
+                output_result = torch.argmax(output_result, dim=1)
+                label_mid = [CHARS[i] for i in output_result]
+                for key, _ in itertools.groupby(label_mid):
+                    if key != '_':
+                        final += key
+                for idx in labels[i]:
+                    if idx != 62:
+                        label += CHARS[int(idx)]
+                if final == label:
+                    correct += 1
+            # correct += (pred == labels).sum().item()
+    acc = correct / len(test_loader.dataset)
+    print('[%d / %d]: Accuracy on test set: %.2f %% ' % (epoch + 1, EPOCH, 100 * acc))  # 求测试的准确率，正确数/总数
+    return acc
