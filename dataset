@@ -1,0 +1,72 @@
+import os
+
+import torch
+import torch.utils.data.dataset as dataset
+from torch.utils.data import ConcatDataset
+import cv2
+import time
+
+from torch import concat
+
+
+def extract_label(img_name):
+    result = ''
+    block = False
+    for i in img_name[:-4]:
+        if block:
+            result += i
+        if i == '_':
+            block = True
+    return result
+
+class Mydataset(dataset.Dataset):
+    def __init__(self, img_path, transform):
+        super(Mydataset, self).__init__()
+        self.img_path = img_path
+        self.img_list = list(os.walk(self.img_path))[0][-1]
+        self.transform = transform
+        self.map = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+                    'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j',
+                    'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't',
+                    'u', 'v', 'w', 'x', 'y', 'z',
+                    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
+                    'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T',
+                    'U', 'V', 'W', 'X', 'Y', 'Z', '_']
+
+    def label_to_vec(self, label, maxlen):
+        label_idx = torch.full((maxlen,), fill_value=len(self.map) - 1, dtype=torch.int64)
+        for i in range(len(label)):
+            label_idx[i] = self.map.index(label[i])
+        return label_idx
+
+    def __len__(self):
+        return len(self.img_list)
+
+    def __getitem__(self, item):
+        #img
+        img_name = self.img_list[item]
+        img = cv2.imread(os.path.join(self.img_path, img_name))#大小为（60，160，3）
+        # 对图片进行预处理
+        if self.transform:
+            img = self.transform(img)
+        #label最大长度为8
+        label = img_name.split('_')[1].split('.')[0]
+        label_idx = self.label_to_vec(label, 8)
+        len_label = len(label)
+
+        #return label, img_name.split('_')[0]
+        return img, label_idx, len_label
+
+
+if __name__ == '__main__':
+    #验证码保存路径
+    train_path = os.path.join(os.getcwd(), 'data\\train-data')
+    valid_path = os.path.join(os.getcwd(), 'data\\valid-data')
+    test_path = os.path.join(os.getcwd(), 'data\\test-data')
+    #print(list(os.walk(train_path)))
+    dat0 = Mydataset(train_path, None)
+    dat1 = Mydataset(valid_path, None)
+    dat = ConcatDataset([dat0, dat1])
+    print(len(dat))
+    print(dat[0])
+    print(dat[10998])
