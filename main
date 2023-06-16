@@ -1,0 +1,96 @@
+import os
+import torch
+import random
+import numpy as np
+import torch.nn as nn
+from torch.utils.data import DataLoader, ConcatDataset
+from CRNN import myCRNN_0, myCRNN_1
+from dataset import Mydataset
+from train_test import train, test
+import torchvision.transforms as transforms
+import matplotlib.pyplot as plt
+from chars import CHARS
+
+
+
+#parameter----------------------------------------------------
+EPOCH = 50
+learning_rate = 0.001
+batch_size = 50
+
+#保证实验结果一致性---------------------------------------------------------------------------------
+# def setup_seed(seed):
+#     random.seed(seed)
+#     torch.manual_seed(seed)
+#     torch.cuda.manual_seed(seed)
+#     torch.cuda.manual_seed_all(seed)
+#     np.random.seed(seed)
+#     torch.backends.cudnn.deterministic = True
+#     torch.backends.cudnn.benchmark = False
+#
+# setup_seed(10)
+
+
+# put model on gpu----------------------------------------------------------------------
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+
+if __name__ == '__main__':
+    # data path-------------------------------------------------------------------------------
+    train_path = os.path.join(os.getcwd(), 'data\\train-data')
+    valid_path = os.path.join(os.getcwd(), 'data\\valid-data')
+    test_path = os.path.join(os.getcwd(), 'data\\test-data')
+
+    #数据预处理
+    transform_train = transforms.Compose([transforms.ToTensor(),
+                                          transforms.Normalize(mean=(0.86873984, 0.8743414, 0.870482),
+                                                               std=(0.17225812, 0.15172446, 0.16618797))])
+
+    transform_valid = transforms.Compose([transforms.ToTensor(),
+                                          transforms.Normalize(mean=(0.87087935, 0.87392676, 0.87294805),
+                                                               std=(0.1689148, 0.1533289, 0.16387364))])
+
+    transform_test = transforms.Compose([transforms.ToTensor(),
+                                          transforms.Normalize(mean=(0.8703038, 0.8742734, 0.8726254),
+                                                               std=(0.1693, 0.15254845, 0.16275904))])
+
+    #创建数据集
+    train_data = Mydataset(train_path, transform_train)
+    valid_data = Mydataset(valid_path, transform_valid)
+    test_data = Mydataset(test_path, transform_test)
+    train_data = ConcatDataset([train_data, valid_data])
+
+    #将数据封装为batch_size大小
+    train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
+    valid_loader = DataLoader(valid_data, batch_size=batch_size, shuffle=False)
+    test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False)
+
+    #实例化模型--------------------------------------------------------------------------------------
+    model = myCRNN_0(3, len(CHARS))
+    model = model.to(device)
+
+    #定义损失函数------------------------------------------------------------------------------------
+    criterion = nn.CTCLoss(blank=len(CHARS) - 1)
+    # criterion = nn.CrossEntropyLoss()
+    criterion = criterion.to(device)
+
+    #定义优化器---------------------------------------------------------------------------------------
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+
+
+    acc_list_test = []
+    #创建模式输出时间序列长度
+    out_len =torch.full(size=(batch_size,), fill_value=18, dtype=torch.long)
+
+
+    for epoch in range(EPOCH):
+        #def train(epoch, EPOCH, train_loader, model, criterion, optimizer, device, out_len):
+        train(epoch, EPOCH, train_loader, model, criterion, optimizer, device)
+        #test(epoch, EPOCH, test_loader, model, device):
+        acc_test = test(epoch, EPOCH, test_loader, model, device)
+        acc_list_test.append(acc_test)
+
+    plt.plot(acc_list_test)
+    plt.xlabel('Epoch')
+    plt.ylabel('Accuracy On TestSet')
+    plt.show()
